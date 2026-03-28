@@ -1,4 +1,4 @@
-﻿namespace ClubeBeneficios.Partners.Api.Extensions;
+namespace ClubeBeneficios.Partners.Api.Extensions;
 
 public static class AuthorizationExtensions
 {
@@ -7,6 +7,7 @@ public static class AuthorizationExtensions
         services.AddAuthorization(options =>
         {
             options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
+            options.AddPolicy("PartnerOnly", policy => policy.RequireRole("partner"));
             options.AddPolicy("PartnerOrAdmin", policy => policy.RequireRole("partner", "admin"));
         });
 

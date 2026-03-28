@@ -1,4 +1,4 @@
-﻿namespace ClubeBeneficios.Partners.Domain.Dtos.Requests;
+namespace ClubeBeneficios.Partners.Domain.Dtos.Requests;
 
 public class CreatePartnerRequest
 {
@@ -15,10 +15,10 @@ public class CreatePartnerRequest
     public string? Instagram { get; set; }
     public string? Description { get; set; }
     public string? Level { get; set; }
-    public bool IndicationFlowEnabled { get; set; }
-    public bool AccessCodeFlowEnabled { get; set; }
-    public string? OriginType { get; set; }
-    public string? Status { get; set; }
+    public bool IndicationFlowEnabled { get; set; } = true;
+    public bool AccessCodeFlowEnabled { get; set; } = true;
+    public string? OriginType { get; set; } = "admin_created";
+    public string? Status { get; set; } = "active";
     public string? ResponsibleName { get; set; }
     public string? ResponsibleRole { get; set; }
     public string? ResponsibleEmail { get; set; }

@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Dapper;
 using ClubeBeneficios.Partners.Domain.Dtos;
 using ClubeBeneficios.Partners.Domain.Dtos.Filters;
@@ -18,7 +18,192 @@ public class PartnerRepository : IPartnerRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<Guid> CreateAsync(CreatePartnerRequest request, CancellationToken cancellationToken = default)
+    public async Task<PagedResultDto<PartnerListItemDto>> GetPagedAsync(
+        PartnerFilterDto filter,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var parameters = new DynamicParameters();
+        parameters.Add("@Search", Normalize(filter.Search));
+        parameters.Add("@Status", Normalize(filter.Status));
+        parameters.Add("@Level", Normalize(filter.Level));
+        parameters.Add("@Category", Normalize(filter.Category));
+        parameters.Add("@Segment", Normalize(filter.Segment));
+        parameters.Add("@SortBy", NormalizeSortBy(filter.SortBy));
+        parameters.Add("@SortDirection", NormalizeSortDirection(filter.SortDirection));
+        parameters.Add("@Page", filter.Page);
+        parameters.Add("@PageSize", filter.PageSize);
+
+        var command = new CommandDefinition(
+            "dbo.usp_partners_admin_search",
+            parameters,
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        var items = (await connection.QueryAsync<PartnerListItemDto>(command)).ToList();
+        var totalCount = items.FirstOrDefault()?.TotalCount ?? 0;
+
+        return PagedResultDto<PartnerListItemDto>.Create(
+            items,
+            totalCount,
+            filter.Page,
+            filter.PageSize);
+    }
+
+    public async Task<PagedResultDto<PartnerListItemDto>> GetPendingAsync(
+        PartnerFilterDto filter,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var parameters = new DynamicParameters();
+        parameters.Add("@Search", Normalize(filter.Search));
+        parameters.Add("@Category", Normalize(filter.Category));
+        parameters.Add("@Segment", Normalize(filter.Segment));
+        parameters.Add("@SortBy", NormalizeSortBy(filter.SortBy));
+        parameters.Add("@SortDirection", NormalizeSortDirection(filter.SortDirection));
+        parameters.Add("@Page", filter.Page);
+        parameters.Add("@PageSize", filter.PageSize);
+
+        var command = new CommandDefinition(
+            "dbo.usp_partners_pending_search",
+            parameters,
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        var items = (await connection.QueryAsync<PartnerListItemDto>(command)).ToList();
+        var totalCount = items.FirstOrDefault()?.TotalCount ?? 0;
+
+        return PagedResultDto<PartnerListItemDto>.Create(
+            items,
+            totalCount,
+            filter.Page,
+            filter.PageSize);
+    }
+
+    public async Task<PartnerDashboardSummaryDto> GetDashboardSummaryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var command = new CommandDefinition(
+            "dbo.usp_partners_admin_summary",
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        return await connection.QueryFirstOrDefaultAsync<PartnerDashboardSummaryDto>(command)
+            ?? new PartnerDashboardSummaryDto();
+    }
+
+    public async Task<PartnerFilterOptionsDto> GetFilterOptionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var command = new CommandDefinition(
+            PartnerSqlQueries.GetFilterOptions,
+            cancellationToken: cancellationToken);
+
+        using var multi = await connection.QueryMultipleAsync(command);
+
+        var statuses = (await multi.ReadAsync<string>()).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToArray();
+        var levels = (await multi.ReadAsync<string>()).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToArray();
+        var categories = (await multi.ReadAsync<string>()).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToArray();
+        var segments = (await multi.ReadAsync<string>()).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToArray();
+
+        return new PartnerFilterOptionsDto
+        {
+            Statuses = statuses,
+            Levels = levels,
+            Categories = categories,
+            Segments = segments
+        };
+    }
+
+    public async Task<PartnerDetailsDto?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var command = new CommandDefinition(
+            PartnerSqlQueries.GetById,
+            new { Id = id },
+            cancellationToken: cancellationToken);
+
+        return await connection.QueryFirstOrDefaultAsync<PartnerDetailsDto>(command);
+    }
+
+    public async Task<PartnerOverviewDto?> GetOverviewAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var partnerCommand = new CommandDefinition(
+            PartnerSqlQueries.GetById,
+            new { Id = id },
+            cancellationToken: cancellationToken);
+
+        var notesCommand = new CommandDefinition(
+            PartnerSqlQueries.GetRecentNotes,
+            new { PartnerId = id, Take = 5 },
+            cancellationToken: cancellationToken);
+
+        var historyCommand = new CommandDefinition(
+            PartnerSqlQueries.GetRecentHistory,
+            new { PartnerId = id, Take = 10 },
+            cancellationToken: cancellationToken);
+
+        var partner = await connection.QueryFirstOrDefaultAsync<PartnerDetailsDto>(partnerCommand);
+        if (partner is null)
+        {
+            return null;
+        }
+
+        var notes = (await connection.QueryAsync<PartnerNoteDto>(notesCommand)).ToArray();
+        var history = (await connection.QueryAsync<PartnerHistoryItemDto>(historyCommand)).ToArray();
+
+        return new PartnerOverviewDto
+        {
+            Partner = partner,
+            RecentNotes = notes,
+            RecentHistory = history
+        };
+    }
+
+    public async Task<IReadOnlyCollection<PartnerNoteDto>> GetNotesAsync(
+        Guid partnerId,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var command = new CommandDefinition(
+            PartnerSqlQueries.GetNotes,
+            new { PartnerId = partnerId },
+            cancellationToken: cancellationToken);
+
+        return (await connection.QueryAsync<PartnerNoteDto>(command)).ToArray();
+    }
+
+    public async Task<IReadOnlyCollection<PartnerHistoryItemDto>> GetHistoryAsync(
+        Guid partnerId,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+
+        var command = new CommandDefinition(
+            PartnerSqlQueries.GetHistory,
+            new { PartnerId = partnerId },
+            cancellationToken: cancellationToken);
+
+        return (await connection.QueryAsync<PartnerHistoryItemDto>(command)).ToArray();
+    }
+
+    public async Task<Guid> CreateAsync(
+        CreatePartnerRequest request,
+        CancellationToken cancellationToken = default)
     {
         using var connection = _connectionFactory.CreateConnection();
 
@@ -47,13 +232,20 @@ public class PartnerRepository : IPartnerRepository
         parameters.Add("@CreatedByUserId", request.CreatedByUserId);
         parameters.Add("@InitialNote", request.InitialNote);
 
-        return await connection.ExecuteScalarAsync<Guid>(
+        var command = new CommandDefinition(
             "dbo.usp_partners_create",
             parameters,
-            commandType: CommandType.StoredProcedure);
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        var id = await connection.ExecuteScalarAsync<Guid>(command);
+        return id;
     }
 
-    public async Task UpdateAsync(Guid id, UpdatePartnerRequest request, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(
+        Guid id,
+        UpdatePartnerRequest request,
+        CancellationToken cancellationToken = default)
     {
         using var connection = _connectionFactory.CreateConnection();
 
@@ -77,13 +269,19 @@ public class PartnerRepository : IPartnerRepository
         parameters.Add("@ResponsibleEmail", request.ResponsibleEmail);
         parameters.Add("@ResponsiblePhone", request.ResponsiblePhone);
 
-        await connection.ExecuteAsync(
+        var command = new CommandDefinition(
             "dbo.usp_partners_update",
             parameters,
-            commandType: CommandType.StoredProcedure);
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        await connection.ExecuteAsync(command);
     }
 
-    public async Task ChangeStatusAsync(Guid id, ChangePartnerStatusRequest request, CancellationToken cancellationToken = default)
+    public async Task ChangeStatusAsync(
+        Guid id,
+        ChangePartnerStatusRequest request,
+        CancellationToken cancellationToken = default)
     {
         using var connection = _connectionFactory.CreateConnection();
 
@@ -93,13 +291,19 @@ public class PartnerRepository : IPartnerRepository
         parameters.Add("@Reason", request.Reason);
         parameters.Add("@ChangedByUserId", request.ChangedByUserId);
 
-        await connection.ExecuteAsync(
+        var command = new CommandDefinition(
             "dbo.usp_partners_change_status",
             parameters,
-            commandType: CommandType.StoredProcedure);
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        await connection.ExecuteAsync(command);
     }
 
-    public async Task AddNoteAsync(Guid id, AddPartnerNoteRequest request, CancellationToken cancellationToken = default)
+    public async Task AddNoteAsync(
+        Guid id,
+        AddPartnerNoteRequest request,
+        CancellationToken cancellationToken = default)
     {
         using var connection = _connectionFactory.CreateConnection();
 
@@ -109,77 +313,34 @@ public class PartnerRepository : IPartnerRepository
         parameters.Add("@Content", request.Content);
         parameters.Add("@CreatedByUserId", request.CreatedByUserId);
 
-        await connection.ExecuteAsync(
+        var command = new CommandDefinition(
             "dbo.usp_partners_add_note",
             parameters,
-            commandType: CommandType.StoredProcedure);
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        await connection.ExecuteAsync(command);
     }
 
-    public async Task<PartnerDetailsDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    private static string? Normalize(string? value)
     {
-        using var connection = _connectionFactory.CreateConnection();
-
-        return await connection.QueryFirstOrDefaultAsync<PartnerDetailsDto>(
-            PartnerSqlQueries.GetById,
-            new { Id = id });
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    public async Task<IReadOnlyCollection<PartnerPendingItemDto>> GetPendingAsync(CancellationToken cancellationToken = default)
+    private static string NormalizeSortBy(string? sortBy)
     {
-        using var connection = _connectionFactory.CreateConnection();
-
-        var result = await connection.QueryAsync<PartnerPendingItemDto>(PartnerSqlQueries.GetPending);
-        return result.ToList();
-    }
-
-    public async Task<PartnerDashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken = default)
-    {
-        using var connection = _connectionFactory.CreateConnection();
-
-        var result = await connection.QueryFirstOrDefaultAsync<PartnerDashboardSummaryDto>(PartnerSqlQueries.GetSummary);
-        return result ?? new PartnerDashboardSummaryDto();
-    }
-
-    public async Task<PagedResultDto<PartnerListItemDto>> GetPagedAsync(PartnerFilterDto filter, CancellationToken cancellationToken = default)
-    {
-        using var connection = _connectionFactory.CreateConnection();
-
-        var sql = @"SELECT * FROM dbo.vw_partners_admin_list
-WHERE (@Search IS NULL OR trade_name LIKE '%' + @Search + '%' OR category LIKE '%' + @Search + '%' OR service_region LIKE '%' + @Search + '%')
-  AND (@Status IS NULL OR status = @Status)
-  AND (@Level IS NULL OR level = @Level)
-  AND (@Category IS NULL OR category = @Category)
-ORDER BY trade_name
-OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
-
-SELECT COUNT(1)
-FROM dbo.vw_partners_admin_list
-WHERE (@Search IS NULL OR trade_name LIKE '%' + @Search + '%' OR category LIKE '%' + @Search + '%' OR service_region LIKE '%' + @Search + '%')
-  AND (@Status IS NULL OR status = @Status)
-  AND (@Level IS NULL OR level = @Level)
-  AND (@Category IS NULL OR category = @Category);";
-
-        var parameters = new
+        if (string.IsNullOrWhiteSpace(sortBy))
         {
-            filter.Search,
-            filter.Status,
-            filter.Level,
-            filter.Category,
-            Offset = (filter.Page - 1) * filter.PageSize,
-            filter.PageSize
-        };
+            return "created_at";
+        }
 
-        using var multi = await connection.QueryMultipleAsync(sql, parameters);
+        return sortBy.Trim().ToLowerInvariant();
+    }
 
-        var items = (await multi.ReadAsync<PartnerListItemDto>()).ToList();
-        var total = await multi.ReadFirstAsync<int>();
-
-        return new PagedResultDto<PartnerListItemDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = filter.Page,
-            PageSize = filter.PageSize
-        };
+    private static string NormalizeSortDirection(string? sortDirection)
+    {
+        return string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase)
+            ? "asc"
+            : "desc";
     }
 }

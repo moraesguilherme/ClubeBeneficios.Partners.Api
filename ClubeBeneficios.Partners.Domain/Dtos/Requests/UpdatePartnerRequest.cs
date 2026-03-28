@@ -1,4 +1,4 @@
-﻿namespace ClubeBeneficios.Partners.Domain.Dtos.Requests;
+namespace ClubeBeneficios.Partners.Domain.Dtos.Requests;
 
 public class UpdatePartnerRequest
 {

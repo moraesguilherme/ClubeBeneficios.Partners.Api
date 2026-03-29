@@ -1,7 +1,4 @@
-﻿using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-
-namespace ClubeBeneficios.Partners.Api;
+﻿namespace ClubeBeneficios.Partners.Api;
 
 public class Program
 {

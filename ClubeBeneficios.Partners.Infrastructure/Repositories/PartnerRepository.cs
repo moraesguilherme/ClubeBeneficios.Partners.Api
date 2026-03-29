@@ -85,15 +85,23 @@ public class PartnerRepository : IPartnerRepository
     public async Task<PartnerDashboardSummaryDto> GetDashboardSummaryAsync(
         CancellationToken cancellationToken = default)
     {
-        using var connection = _connectionFactory.CreateConnection();
+        try
+        {
+            using var connection = _connectionFactory.CreateConnection();
 
-        var command = new CommandDefinition(
-            "dbo.usp_partners_admin_summary",
-            commandType: CommandType.StoredProcedure,
-            cancellationToken: cancellationToken);
+            var command = new CommandDefinition(
+                "dbo.usp_partners_admin_summary",
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken);
 
-        return await connection.QueryFirstOrDefaultAsync<PartnerDashboardSummaryDto>(command)
-            ?? new PartnerDashboardSummaryDto();
+            return await connection.QueryFirstOrDefaultAsync<PartnerDashboardSummaryDto>(command)
+                ?? new PartnerDashboardSummaryDto();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("ERRO GetDashboardSummaryAsync: " + ex);
+            throw;
+        }
     }
 
     public async Task<PartnerFilterOptionsDto> GetFilterOptionsAsync(

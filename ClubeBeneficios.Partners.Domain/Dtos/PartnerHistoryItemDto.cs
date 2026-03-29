@@ -2,7 +2,7 @@ namespace ClubeBeneficios.Partners.Domain.Dtos;
 
 public class PartnerHistoryItemDto
 {
-    public Guid Id { get; set; }
+    public long Id { get; set; }
     public Guid PartnerId { get; set; }
     public string? FromStatus { get; set; }
     public string? ToStatus { get; set; }

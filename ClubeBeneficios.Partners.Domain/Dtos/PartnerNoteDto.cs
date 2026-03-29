@@ -2,7 +2,7 @@ namespace ClubeBeneficios.Partners.Domain.Dtos;
 
 public class PartnerNoteDto
 {
-    public Guid Id { get; set; }
+    public long Id { get; set; }
     public Guid PartnerId { get; set; }
     public string? NoteType { get; set; }
     public string? Content { get; set; }

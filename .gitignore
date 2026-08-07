@@ -5,4 +5,5 @@ obj/
 *.suo
 *.cache
 *.pdb
+publish/
 appsettings.Development.json

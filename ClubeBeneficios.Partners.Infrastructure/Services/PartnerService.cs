@@ -3,16 +3,21 @@ using ClubeBeneficios.Partners.Domain.Dtos.Filters;
 using ClubeBeneficios.Partners.Domain.Dtos.Requests;
 using ClubeBeneficios.Partners.Domain.Repositories;
 using ClubeBeneficios.Partners.Domain.Services;
+using ClubeBeneficios.Partners.Infrastructure.Clients.Identity;
 
 namespace ClubeBeneficios.Partners.Infrastructure.Services;
 
 public class PartnerService : IPartnerService
 {
     private readonly IPartnerRepository _partnerRepository;
+    private readonly IIdentityPartnerInvitationClient _identityInvitationClient;
 
-    public PartnerService(IPartnerRepository partnerRepository)
+    public PartnerService(
+        IPartnerRepository partnerRepository,
+        IIdentityPartnerInvitationClient identityInvitationClient)
     {
         _partnerRepository = partnerRepository;
+        _identityInvitationClient = identityInvitationClient;
     }
 
     public Task<PagedResultDto<PartnerListItemDto>> GetPagedAsync(
@@ -64,11 +69,21 @@ public class PartnerService : IPartnerService
         CancellationToken cancellationToken = default)
         => _partnerRepository.UpdateAsync(id, request, cancellationToken);
 
-    public Task ChangeStatusAsync(
+    public async Task ChangeStatusAsync(
         Guid id,
         ChangePartnerStatusRequest request,
         CancellationToken cancellationToken = default)
-        => _partnerRepository.ChangeStatusAsync(id, request, cancellationToken);
+    {
+        await _partnerRepository.ChangeStatusAsync(id, request, cancellationToken);
+
+        if (string.Equals(request.NewStatus, "approved", StringComparison.OrdinalIgnoreCase))
+        {
+            await _identityInvitationClient.CreateInvitationAsync(
+                id,
+                request.ChangedByUserId,
+                cancellationToken);
+        }
+    }
 
     public Task AddNoteAsync(
         Guid id,

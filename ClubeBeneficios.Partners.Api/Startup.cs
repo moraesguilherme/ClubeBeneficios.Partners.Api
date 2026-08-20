@@ -1,4 +1,5 @@
 using ClubeBeneficios.Partners.Api.Extensions;
+using ClubeBeneficios.Partners.Infrastructure.Clients.Identity;
 using ClubeBeneficios.Partners.Infrastructure.DependencyInjection;
 using Dapper;
 
@@ -24,6 +25,19 @@ public class Startup
         services.AddApiAuthorization();
         services.AddInfrastructure();
         services.AddApplicationServices();
+        services.AddHttpClient<IIdentityPartnerInvitationClient, IdentityPartnerInvitationClient>((serviceProvider, client) =>
+        {
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+
+            var baseUrl = configuration["IdentityApi:BaseUrl"];
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                throw new InvalidOperationException("IdentityApi:BaseUrl não configurada.");
+            }
+
+            client.BaseAddress = new Uri(baseUrl);
+        });
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

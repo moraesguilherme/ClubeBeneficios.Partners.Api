@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<DbConnectionFactory>();
         services.AddScoped<IPartnerRepository, PartnerRepository>();
+        services.AddScoped<IPartnerPublicCatalogLinkRepository, PartnerPublicCatalogLinkRepository>();
         services.AddScoped<IUserContext, CurrentUserContext>();
 
         return services;
@@ -24,6 +25,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddScoped<IPartnerService, PartnerService>();
+        services.AddScoped<IPartnerPublicCatalogLinkService, PartnerPublicCatalogLinkService>();
         return services;
     }
 }
